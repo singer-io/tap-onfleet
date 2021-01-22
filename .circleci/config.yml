@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: 218546966473.dkr.ecr.us-east-1.amazonaws.com/circle-ci:tap-tester
+      - image: 218546966473.dkr.ecr.us-east-1.amazonaws.com/circle-ci:tap-tester-v4
     steps:
       - checkout
       - run:
@@ -10,7 +10,7 @@ jobs:
           command: |
             python3 -mvenv /usr/local/share/virtualenvs/tap-onfleet
             source /usr/local/share/virtualenvs/tap-onfleet/bin/activate
-            pip install -U 'pip<19.2' setuptools
+            pip install -U 'pip<19.2' 'setuptools<51.0.0'
             pip install .[dev]
       - add_ssh_keys
       - run:
@@ -22,7 +22,8 @@ workflows:
   version: 2
   commit:
     jobs:
-      - build
+      - build:
+          context: circleci-user
   build_daily:
     triggers:
       - schedule:
@@ -32,4 +33,5 @@ workflows:
               only:
                 - master
     jobs:
-      - build
+      - build:
+          context: circleci-user
