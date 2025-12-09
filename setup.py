@@ -3,16 +3,16 @@
 from setuptools import setup
 
 setup(name='tap-onfleet',
-      version='1.0.1',
+      version='1.0.2',
       description='Singer.io tap for extracting data from the onfleet API',
       author='Stitch',
       url='http://github.com/lambtron/tap-onfleet',
       classifiers=['Programming Language :: Python :: 3 :: Only'],
       py_modules=['tap_onfleet'],
       install_requires=[
-          'singer-python==5.1.5',
-          'requests==2.31.0',
-          'backoff==1.3.2'
+          'singer-python==5.14.3',
+          'requests==2.32.5',
+          'backoff==1.10.0'
       ],
       entry_points='''
           [console_scripts]

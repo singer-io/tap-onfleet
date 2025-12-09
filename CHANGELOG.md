@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.0.2
+  * Bump dependencies [#10](https://github.com/singer-io/tap-onfleet/pull/10)
+
 ## 1.0.1
   * Dependabot update [#6](https://github.com/singer-io/tap-onfleet/pull/6)
 
