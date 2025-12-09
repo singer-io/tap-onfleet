@@ -10,9 +10,9 @@ setup(name='tap-onfleet',
       classifiers=['Programming Language :: Python :: 3 :: Only'],
       py_modules=['tap_onfleet'],
       install_requires=[
-          'singer-python==5.1.5',
-          'requests==2.31.0',
-          'backoff==1.3.2'
+          'singer-python==5.14.3',
+          'requests==2.32.5',
+          'backoff==1.10.0'
       ],
       entry_points='''
           [console_scripts]
