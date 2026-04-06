@@ -10,17 +10,27 @@ setup(name='tap-onfleet',
       classifiers=['Programming Language :: Python :: 3 :: Only'],
       py_modules=['tap_onfleet'],
       install_requires=[
-          'singer-python==5.14.3',
+          'singer-python==6.8.0',
           'requests==2.32.5',
-          'backoff==1.10.0'
+          'backoff==2.2.1',
       ],
+      extras_require={
+          "dev": [
+              "pylint",
+              "ipdb",
+              "nose",
+              "parameterized",
+              "pytest",
+              "coverage",
+          ],
+      },
       entry_points='''
           [console_scripts]
           tap-onfleet=tap_onfleet:main
       ''',
       packages=['tap_onfleet'],
-      package_data = {
-          "schemas": ["tap_onfleet/schemas/*.json"]
+      package_data={
+          "tap_onfleet": ["schemas/*.json"]
       },
       include_package_data=True,
-)
+      )
