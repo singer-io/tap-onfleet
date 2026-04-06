@@ -200,9 +200,14 @@ class TestStreamEndpoints(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]['id'], 'org1')
 
+    @patch('tap_onfleet.onfleet.time.localtime')
     @patch('tap_onfleet.onfleet.requests.get')
-    def test_tasks_yields_paginated(self, mock_get):
+    def test_tasks_yields_paginated(self, mock_get, mock_localtime):
         """tasks() paginates via lastId and yields all records."""
+        import time as _time
+        # Force localtime to return UTC so %Z produces 'UTC' (parseable)
+        mock_localtime.side_effect = lambda s: _time.gmtime(s)
+
         page1_response = MagicMock()
         page1_response.json.return_value = {
             'tasks': [
