@@ -18,7 +18,6 @@ setup(name='tap-onfleet',
           "dev": [
               "pylint",
               "ipdb",
-              "nose",
               "parameterized",
               "pytest",
               "coverage",
