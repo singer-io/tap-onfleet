@@ -1,7 +1,7 @@
 # Changelog
 
 ## 1.1.0
-- Updated python version. [#11](https://github.com/singer-io/tap-campaign-monitor/pull/11)
+- Updated python version. [#11](https://github.com/singer-io/tap-onfleet/pull/11)
 - Added unit and integration tests.
 
 ## 1.0.2
