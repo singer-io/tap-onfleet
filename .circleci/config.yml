@@ -55,11 +55,9 @@ jobs:
               uv pip install --upgrade awscli
               aws s3 cp s3://com-stitchdata-dev-deployment-assets/environments/tap-tester/tap_tester_sandbox dev_env.sh
               source dev_env.sh
-              unset USE_STITCH_BACKEND
               run-test --tap=tap-onfleet tests
             else
               source /usr/local/share/virtualenvs/tap-onfleet/bin/activate
-              uv pip install pytest
               python -m pytest tests/mock_integration/ -v
             fi
 workflows:
