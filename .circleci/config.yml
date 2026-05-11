@@ -8,7 +8,7 @@ jobs:
       - run:
           name: 'Setup virtual env'
           command: |
-            uv venv --python 3.9 /usr/local/share/virtualenvs/tap-onfleet
+            uv venv --python 3.12 /usr/local/share/virtualenvs/tap-onfleet
             source /usr/local/share/virtualenvs/tap-onfleet/bin/activate
             uv pip install -U pip setuptools
             uv pip install .[dev]
@@ -18,6 +18,48 @@ jobs:
           command: |
             source /usr/local/share/virtualenvs/tap-tester/bin/activate
             stitch-validate-json tap_onfleet/schemas/*.json
+      - run:
+          name: 'pylint'
+          command: |
+            source /usr/local/share/virtualenvs/tap-onfleet/bin/activate
+            pylint tap_onfleet  -d C,R,W
+      - run:
+          name: 'Unit Tests'
+          command: |
+            source /usr/local/share/virtualenvs/tap-onfleet/bin/activate
+            mkdir -p test_output
+            coverage run -m pytest tests/unittests --junitxml=test_output/report.xml
+            coverage html
+      - store_test_results:
+          path: test_output
+      - store_artifacts:
+          path: htmlcov
+      # ----------------------------------------------------------------
+      # Integration Tests — controlled by USE_TAPTESTER env var.
+      #
+      #   Default (USE_TAPTESTER unset or "false"):
+      #     Runs mocked integration tests — no API credentials needed.
+      #
+      #   USE_TAPTESTER=true:
+      #     Runs tap-tester with real API calls.
+      #     Requires TAP_ONFLEET_API_KEY in the environment.
+      #
+      # To switch modes, set USE_TAPTESTER in CircleCI project settings
+      # or in the "circleci-user" context.
+      # ----------------------------------------------------------------
+      - run:
+          name: 'Integration Tests'
+          command: |
+            if [ "${USE_TAPTESTER}" = "true" ]; then
+              source /usr/local/share/virtualenvs/tap-tester/bin/activate
+              uv pip install --upgrade awscli
+              aws s3 cp s3://com-stitchdata-dev-deployment-assets/environments/tap-tester/tap_tester_sandbox dev_env.sh
+              source dev_env.sh
+              run-test --tap=tap-onfleet tests
+            else
+              source /usr/local/share/virtualenvs/tap-onfleet/bin/activate
+              python -m pytest tests/mock_integration/ -v
+            fi
 workflows:
   version: 2
   commit:
