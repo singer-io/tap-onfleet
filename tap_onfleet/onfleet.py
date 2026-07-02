@@ -6,6 +6,7 @@
 from datetime import datetime, timedelta
 from requests.auth import HTTPBasicAuth
 from singer import utils
+from tap_onfleet.exceptions import OnfleetForbiddenError
 import backoff
 import requests
 import logging
@@ -87,9 +88,26 @@ class Onfleet(object):
 
     logger.info("GET request to {uri}".format(uri=uri))
     response = requests.get(uri, auth=HTTPBasicAuth(self.api_key, ''), params=payload)
+    if response.status_code == 403:
+      raise OnfleetForbiddenError(
+        "HTTP-error-code: 403, Error: {}".format(response.text)
+      )
     response.raise_for_status()
     self._check_rate_limit(response.headers.get('X-RateLimit-Remaining'), response.headers.get('X-RateLimit-Limit'))
     return response.json()
+
+
+  def _check_endpoint(self, path):
+    """
+    Probe an endpoint to verify read access.
+    Raises OnfleetForbiddenError if a 403 response is received.
+    """
+    uri = "{uri}{path}".format(uri=self.uri, path=path)
+    response = requests.get(uri, auth=HTTPBasicAuth(self.api_key, ''))
+    if response.status_code == 403:
+      raise OnfleetForbiddenError(
+        "HTTP-error-code: 403, Error: {}".format(response.text)
+      )
     
 
   # 

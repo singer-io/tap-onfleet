@@ -14,6 +14,7 @@ import time
 from singer.metrics import Point
 from dateutil.parser import parse
 from tap_onfleet.context import Context
+from tap_onfleet.exceptions import OnfleetForbiddenError
 
 
 logger = singer.get_logger()
@@ -41,10 +42,33 @@ class Stream():
     stream = None
     key_properties = KEY_PROPERTIES
     session_bookmark = None
+    parent = None
+    endpoint = None
 
 
     def __init__(self, client=None):
         self.client = client
+
+
+    def check_access(self) -> bool:
+        """
+        Verify that the API credentials have read access to this stream.
+        Returns True if accessible, False if a 403 Forbidden error is raised.
+        Child streams always return True since access is governed by the parent check.
+        """
+        if self.parent:
+            return True
+
+        try:
+            self.client._check_endpoint(self.endpoint)
+            return True
+        except OnfleetForbiddenError as exc:
+            logger.warning(
+                "Permission Error: Stream '%s' - %s",
+                self.__class__.__name__,
+                exc,
+            )
+            return False
 
 
     def get_bookmark(self, state):
@@ -116,12 +140,14 @@ class Administrators(Stream):
     replication_method = "INCREMENTAL"
     replication_key = "timeLastModified"
     key_properties = "id"
+    endpoint = "admins"
 
 
 class Hubs(Stream):
     name = "hubs"
     replication_method = "FULL_TABLE"
     key_properties = "id"
+    endpoint = "hubs"
 
 
 class Organizations(Stream):
@@ -129,6 +155,7 @@ class Organizations(Stream):
     replication_method = "INCREMENTAL"
     replication_key = "timeLastModified"
     key_properties = "id"
+    endpoint = "organization"
 
 
 class Tasks(Stream):
@@ -136,6 +163,7 @@ class Tasks(Stream):
     replication_method = "INCREMENTAL"
     replication_key = "timeLastModified"
     key_properties = "id"
+    endpoint = "tasks/all"
 
 
 class Teams(Stream):
@@ -143,6 +171,7 @@ class Teams(Stream):
     replication_method = "INCREMENTAL"
     replication_key = "timeLastModified"
     key_properties = "id"
+    endpoint = "teams"
 
 
 class Workers(Stream):
@@ -150,6 +179,7 @@ class Workers(Stream):
     replication_method = "INCREMENTAL"
     replication_key = "timeLastModified"
     key_properties = "id"
+    endpoint = "workers"
 
 
 
