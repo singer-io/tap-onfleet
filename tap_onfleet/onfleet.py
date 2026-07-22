@@ -11,6 +11,7 @@ import requests
 import logging
 import time
 import sys
+from tap_onfleet.exceptions import OnfleetForbiddenError
 
 
 logger = logging.getLogger()
@@ -87,6 +88,10 @@ class Onfleet(object):
 
     logger.info("GET request to {uri}".format(uri=uri))
     response = requests.get(uri, auth=HTTPBasicAuth(self.api_key, ''), params=payload)
+    if response.status_code == 403:
+      raise OnfleetForbiddenError(
+        "HTTP-error-code: 403, Error: Access forbidden for resource: {}".format(path)
+      )
     response.raise_for_status()
     self._check_rate_limit(response.headers.get('X-RateLimit-Remaining'), response.headers.get('X-RateLimit-Limit'))
     return response.json()

@@ -14,6 +14,7 @@ import time
 from singer.metrics import Point
 from dateutil.parser import parse
 from tap_onfleet.context import Context
+from tap_onfleet.exceptions import OnfleetForbiddenError
 
 
 logger = singer.get_logger()
@@ -41,10 +42,37 @@ class Stream():
     stream = None
     key_properties = KEY_PROPERTIES
     session_bookmark = None
+    parent = None
 
 
     def __init__(self, client=None):
         self.client = client
+
+
+    def check_access(self) -> bool:
+        """
+        Verify that the API credentials have read access to this stream.
+        Returns True if accessible, False if a 403 Forbidden error is raised.
+        Child streams always return True (access is governed by the parent check).
+        """
+        if self.parent:
+            return True
+        try:
+            method = getattr(self.client, self.name)
+            result = method(self.replication_key, self.client.start_date)
+            # Regular methods (e.g. administrators) make the HTTP call immediately
+            # when called above. Generator methods (e.g. organizations, tasks) defer
+            # the HTTP call until iteration — next(iter(...)) forces that first call
+            # so a 403 is caught here rather than silently missed.
+            next(iter(result), None)
+            return True
+        except OnfleetForbiddenError as exc:
+            logger.warning(
+                "Excluding unauthorized stream '%s' from catalog. HTTP-Error-Message: '%s'",
+                self.name,
+                exc,
+            )
+            return False
 
 
     def get_bookmark(self, state):
