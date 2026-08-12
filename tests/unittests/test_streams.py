@@ -11,6 +11,7 @@ from tap_onfleet.streams import (
     STREAMS,
 )
 from tap_onfleet.context import Context
+from tap_onfleet.exceptions import OnfleetForbiddenError
 
 
 class TestStreamClasses(unittest.TestCase):
@@ -159,6 +160,28 @@ class TestBookmarkMethods(unittest.TestCase):
         }}}
         self.assertFalse(
             stream.is_bookmark_old(state, '2024-01-01T00:00:00Z'))
+
+
+class TestCheckAccess(unittest.TestCase):
+    """Tests for Stream.check_access()."""
+
+    def test_logs_warning_for_unauthorized_stream(self):
+        """check_access logs expected warning and returns False on 403."""
+        client = MagicMock()
+        client.start_date = '2019-01-01T00:00:00Z'
+        forbidden_error = OnfleetForbiddenError('403 Forbidden')
+        client.administrators.side_effect = forbidden_error
+
+        stream = Administrators(client)
+        with patch('tap_onfleet.streams.logger.warning') as warning_mock:
+            has_access = stream.check_access()
+
+        self.assertFalse(has_access)
+        warning_mock.assert_called_once_with(
+            "Excluding unauthorized stream '%s' from catalog. HTTP-Error-Message: '%s'",
+            'administrators',
+            forbidden_error,
+        )
 
 
 class TestSyncMethod(unittest.TestCase):

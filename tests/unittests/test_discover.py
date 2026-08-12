@@ -1,8 +1,9 @@
 """Unit tests for tap_onfleet.discover module."""
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
-from tap_onfleet.discover import discover_streams
+from tap_onfleet.discover import _apply_access_checks, discover_streams
+from tap_onfleet.exceptions import OnfleetForbiddenError
 from tap_onfleet.streams import STREAMS
 
 
@@ -40,3 +41,69 @@ class TestDiscoverStreams(unittest.TestCase):
             with self.subTest(stream=entry['stream']):
                 self.assertIn('properties', entry['schema'])
                 self.assertGreater(len(entry['schema']['properties']), 0)
+
+    def test_logs_warning_for_excluded_streams(self):
+        """Excluded streams log the expected unauthorized warning."""
+        class NoAccessStream:
+            parent = None
+
+            def __init__(self, client=None):
+                del client
+
+            def check_access(self):
+                return False
+
+        class AccessibleStream:
+            parent = None
+
+            def __init__(self, client=None):
+                del client
+
+            def check_access(self):
+                return True
+
+        fake_streams = {
+            'blocked': NoAccessStream,
+            'allowed': AccessibleStream,
+        }
+        schemas = {'blocked': {}, 'allowed': {}}
+        field_metadata = {'blocked': [], 'allowed': []}
+
+        with patch('tap_onfleet.discover.STREAMS', fake_streams):
+            with patch('tap_onfleet.discover.logger.warning') as warning_mock:
+                _apply_access_checks(MagicMock(), schemas, field_metadata)
+
+        warning_mock.assert_called_once_with(
+            'Unauthorized streams excluded from catalog: %s',
+            'blocked',
+        )
+
+    def test_raises_forbidden_when_no_streams_accessible(self):
+        """No accessible streams raises forbidden error with exact message."""
+        class NoAccessStream:
+            parent = None
+
+            def __init__(self, client=None):
+                del client
+
+            def check_access(self):
+                return False
+
+        fake_streams = {
+            'blocked_a': NoAccessStream,
+            'blocked_b': NoAccessStream,
+        }
+        schemas = {'blocked_a': {}, 'blocked_b': {}}
+        field_metadata = {'blocked_a': [], 'blocked_b': []}
+
+        with patch('tap_onfleet.discover.STREAMS', fake_streams):
+            with self.assertRaisesRegex(
+                OnfleetForbiddenError,
+                'No streams are accessible. Ensure the credentials have read permission for at least one stream.',
+            ) as err:
+                _apply_access_checks(MagicMock(), schemas, field_metadata)
+
+        self.assertEqual(
+            str(err.exception),
+            'No streams are accessible. Ensure the credentials have read permission for at least one stream.',
+        )
