@@ -65,3 +65,35 @@ class TestSyncStream(unittest.TestCase):
         self.assertEqual(count, 2)
         self.assertEqual(mock_write_record.call_count, 2)
         mock_write_state.assert_not_called()  # FULL_TABLE doesn't write state
+
+    @patch('tap_onfleet.sync.logger.error')
+    @patch('tap_onfleet.sync.singer.write_record')
+    def test_sync_stream_handles_transform_exceptions(self, mock_write_record, mock_log_error):
+        """sync_stream logs and continues when transform/write block raises."""
+        client = MagicMock()
+        client.administrators = MagicMock(return_value=[
+            {'id': 'a1', 'timeLastModified': '2024-06-15 10:00:00 UTC', 'name': 'Admin 1'},
+        ])
+        instance = Administrators(client)
+        instance.stream = MagicMock()
+        instance.stream.tap_stream_id = 'administrators'
+        instance.stream.schema.to_dict.return_value = {
+            'properties': {
+                'id': {'type': ['null', 'string']},
+                'timeLastModified': {'type': ['null', 'string']},
+            }
+        }
+        instance.stream.metadata = [{'breadcrumb': (), 'metadata': {}}]
+
+        transformer_cm = MagicMock()
+        transformer_obj = MagicMock()
+        transformer_obj.transform.side_effect = Exception('boom')
+        transformer_cm.__enter__.return_value = transformer_obj
+        transformer_cm.__exit__.return_value = False
+
+        with patch('tap_onfleet.sync.Transformer', return_value=transformer_cm):
+            count = sync_stream({}, instance)
+
+        self.assertEqual(count, 1)
+        mock_write_record.assert_not_called()
+        mock_log_error.assert_called_once()

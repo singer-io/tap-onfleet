@@ -1,4 +1,5 @@
 """Unit tests for tap_onfleet.discover module."""
+import importlib
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -6,8 +7,15 @@ from tap_onfleet.discover import _apply_access_checks, discover_streams
 from tap_onfleet.exceptions import OnfleetForbiddenError
 from tap_onfleet.streams import STREAMS
 
+discover_module = importlib.import_module('tap_onfleet.discover')
+
 
 class TestDiscoverStreams(unittest.TestCase):
+
+    def test_get_abs_path_resolves_within_module_dir(self):
+        """get_abs_path builds paths relative to discover module file."""
+        result = discover_module.get_abs_path('schemas/administrators.json')
+        self.assertTrue(result.endswith('tap_onfleet/schemas/administrators.json'))
 
     def test_returns_all_streams(self):
         """discover_streams returns an entry for every stream in STREAMS."""
