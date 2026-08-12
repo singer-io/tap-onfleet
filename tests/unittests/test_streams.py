@@ -11,6 +11,7 @@ from tap_onfleet.streams import (
     STREAMS,
 )
 from tap_onfleet.context import Context
+from tap_onfleet.exceptions import OnfleetForbiddenError
 
 
 class TestStreamClasses(unittest.TestCase):
@@ -48,6 +49,27 @@ class TestStreamClasses(unittest.TestCase):
         self.assertEqual(Tasks.replication_key, 'timeLastModified')
         self.assertEqual(Teams.replication_key, 'timeLastModified')
         self.assertEqual(Workers.replication_key, 'timeLastModified')
+
+
+class TestCheckAccess(unittest.TestCase):
+    """Tests for Stream.check_access()."""
+
+    def test_logs_warning_for_forbidden_stream(self):
+        """403 access failures log the expected warning message."""
+        client = MagicMock()
+        error_message = 'forbidden to read stream'
+        client._check_endpoint.side_effect = OnfleetForbiddenError(error_message)
+
+        stream = Administrators(client)
+        with patch('tap_onfleet.streams.LOGGER.warning') as warning_mock:
+            has_access = stream.check_access()
+
+        self.assertFalse(has_access)
+        warning_mock.assert_called_once_with(
+            "Unauthorized Stream: %s, excluding from catalog. HTTP-Error-Message: '%s'",
+            'Administrators',
+            error_message,
+        )
 
 
 class TestLoadSchema(unittest.TestCase):

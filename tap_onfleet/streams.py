@@ -17,7 +17,7 @@ from tap_onfleet.context import Context
 from tap_onfleet.exceptions import OnfleetForbiddenError
 
 
-logger = singer.get_logger()
+LOGGER = singer.get_logger()
 KEY_PROPERTIES = ['id']
 
 
@@ -63,10 +63,10 @@ class Stream():
             self.client._check_endpoint(self.endpoint)
             return True
         except OnfleetForbiddenError as exc:
-            logger.warning(
-                "Permission Error: Stream '%s' - %s",
+            LOGGER.warning(
+                "Unauthorized Stream: %s, excluding from catalog. HTTP-Error-Message: '%s'",
                 self.__class__.__name__,
-                exc,
+                str(exc),
             )
             return False
 

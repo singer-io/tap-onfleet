@@ -17,12 +17,13 @@ def get_abs_path(path):
     return os.path.join(os.path.dirname(os.path.realpath(__file__)), path)
 
 
-def _prune_inaccessible_children(accessible: set) -> set:
+def _prune_inaccessible_children(accessible: set) -> tuple[set, list]:
     """
     Remove child streams whose parent stream was excluded.
-    Returns the pruned set of accessible stream names.
+    Returns the pruned set and list of child streams that were removed.
     """
     pruned = set(accessible)
+    pruned_children = []
     for name, stream_cls in STREAMS.items():
         if name in pruned and stream_cls.parent and stream_cls.parent not in pruned:
             LOGGER.warning(
@@ -31,7 +32,8 @@ def _prune_inaccessible_children(accessible: set) -> set:
                 stream_cls.parent,
             )
             pruned.discard(name)
-    return pruned
+            pruned_children.append(name)
+    return pruned, pruned_children
 
 
 def _apply_access_checks(client, stream_names: list) -> list:
@@ -46,16 +48,17 @@ def _apply_access_checks(client, stream_names: list) -> list:
     ]
 
     accessible = set(stream_names) - set(inaccessible)
-    accessible = _prune_inaccessible_children(accessible)
+    accessible, pruned_children = _prune_inaccessible_children(accessible)
+    inaccessible.extend(pruned_children)
 
     if not accessible:
         raise OnfleetForbiddenError(
-            "HTTP-error-code: 403, Error: The credentials do not have 'read' access to any supported streams."
+            "No streams are accessible. Ensure the credentials have read permission for at least one stream."
         )
 
     if inaccessible:
         LOGGER.warning(
-            "No 'read' access to stream(s): %s. Excluded from catalog.",
+            "Unauthorized streams excluded from catalog: %s",
             ", ".join(inaccessible),
         )
 
