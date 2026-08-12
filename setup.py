@@ -3,7 +3,7 @@
 from setuptools import setup
 
 setup(name='tap-onfleet',
-      version='1.1.0',
+      version='1.1.1',
       description='Singer.io tap for extracting data from the onfleet API',
       author='Stitch',
       url='http://github.com/lambtron/tap-onfleet',
@@ -14,13 +14,22 @@ setup(name='tap-onfleet',
           'requests==2.34.2',
           'backoff==2.2.1'
       ],
+      extras_require={
+          "dev": [
+              "pylint",
+              "ipdb",
+              "parameterized",
+              "pytest",
+              "coverage",
+          ],
+      },
       entry_points='''
           [console_scripts]
           tap-onfleet=tap_onfleet:main
       ''',
       packages=['tap_onfleet'],
-      package_data = {
-          "schemas": ["tap_onfleet/schemas/*.json"]
+      package_data={
+          "tap_onfleet": ["schemas/*.json"]
       },
       include_package_data=True,
-)
+      )
