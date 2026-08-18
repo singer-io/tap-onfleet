@@ -186,6 +186,9 @@ class TestDiscoverStreams(unittest.TestCase):
         for entry in result:
             self.assertIn('stream', entry)
             self.assertIn('tap_stream_id', entry)
+            self.assertIn('key_properties', entry)
+            self.assertIsInstance(entry['key_properties'], list)
+            self.assertTrue(entry['key_properties'])
             self.assertIn('schema', entry)
             self.assertIn('metadata', entry)
 

@@ -1,10 +1,9 @@
 
-# 
+#
 # Module dependencies.
-# 
+#
 
 import os
-import json
 import singer
 from tap_onfleet.streams import STREAMS
 from tap_onfleet.exceptions import OnfleetForbiddenError
@@ -24,9 +23,10 @@ def _prune_inaccessible_children(schemas: dict, field_metadata: dict) -> None:
     """
     to_remove = []
     for name, stream_cls in list(STREAMS.items()):
-        if name in schemas and getattr(stream_cls, 'parent', None) and stream_cls.parent not in schemas:
+        if (name in schemas and getattr(stream_cls, 'parent', None)
+                and stream_cls.parent not in schemas):
             logger.warning(
-                "Stream '%s' excluded from catalog because its parent stream '%s' is not accessible.",
+                "Stream '%s' excluded because parent stream '%s' is not accessible.",
                 name, stream_cls.parent,
             )
             schemas.pop(name, None)
@@ -56,9 +56,10 @@ def _apply_access_checks(client, schemas: dict, field_metadata: dict) -> None:
 
     if not schemas:
         raise OnfleetForbiddenError(
-            "No streams are accessible. Ensure the credentials have read permission for at least one stream."
+            "No streams are accessible. Ensure the credentials have read "
+            "permission for at least one stream."
         )
-    elif inaccessible_streams:
+    if inaccessible_streams:
         logger.warning(
             "Unauthorized streams excluded from catalog: %s",
             ", ".join(inaccessible_streams),
@@ -77,14 +78,12 @@ def discover_streams(client):
     _apply_access_checks(client, schemas, field_metadata)
 
     streams = []
-    for name in schemas:
+    for name, schema in schemas.items():
         streams.append({
             'stream': name,
             'tap_stream_id': name,
-            'schema': schemas[name],
+            'key_properties': STREAMS[name].key_properties,
+            'schema': schema,
             'metadata': field_metadata[name],
         })
     return streams
-
-
-
