@@ -71,7 +71,7 @@
         "null",
         "array"
       ],
-      "items": {}
+      "items": {"type": ["null", "string"]}
     },
     "state": {
       "type": [
@@ -114,7 +114,7 @@
             "null",
             "array"
           ],
-          "items": {}
+          "items": {"type": ["null", "string"]}
         },
         "failureReason": {
           "type": [
@@ -134,21 +134,21 @@
             "null",
             "array"
           ],
-          "items": {}
+          "items": {"type": ["null", "string"]}
         },
         "lastLocation": {
           "type": [
             "null",
             "array"
           ],
-          "items": {}
+          "items": {"type": ["null", "string"]}
         },
         "unavailableAttachments": {
           "type": [
             "null",
             "array"
           ],
-          "items": {}
+          "items": {"type": ["null", "string"]}
         }
       }
     },
@@ -157,14 +157,14 @@
         "null",
         "array"
       ],
-      "items": {}
+      "items": {"type": ["null", "string"]}
     },
     "metadata": {
       "type": [
         "null",
         "array"
       ],
-      "items": {}
+      "items": {"type": ["null", "string"]}
     },
     "overrides": {
       "type": [
@@ -295,7 +295,7 @@
               "null",
               "array"
             ],
-            "items": {}
+            "items": {"type": ["null", "string"]}
           }
         }
       }
@@ -331,7 +331,7 @@
             "null",
             "array"
           ],
-          "items": {}
+          "items": {"type": ["null", "string"]}
         },
         "address": {
           "type": [
@@ -394,7 +394,7 @@
             "null",
             "array"
           ],
-          "items": {}
+          "items": {"type": ["null", "string"]}
         }
       }
     }
