@@ -21,7 +21,7 @@
         "null",
         "array"
       ],
-      "items": {}
+      "items": {"type": ["null", "string"]}
     },
     "address": {
       "type": [
@@ -78,7 +78,7 @@
         "null",
         "array"
       ],
-      "items": {}
+      "items": {"type": ["null", "string"]}
     }
   }
 }

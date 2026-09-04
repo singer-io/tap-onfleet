@@ -35,14 +35,14 @@
         "null",
         "array"
       ],
-      "items": {}
+      "items": {"type": ["null", "string"]}
     },
     "managers": {
       "type": [
         "null",
         "array"
       ],
-      "items": {}
+      "items": {"type": ["null", "string"]}
     },
     "hub": {
       "type": [
@@ -55,7 +55,7 @@
         "null",
         "array"
       ],
-      "items": {}
+      "items": {"type": ["null", "string"]}
     }
   }
 }

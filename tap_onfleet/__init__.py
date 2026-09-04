@@ -47,8 +47,6 @@ def get_selected_streams(catalog):
 
 
 def sync(client, catalog, state):
-    selected_stream_names = get_selected_streams(catalog)
-
     for stream in catalog.streams:
         stream_name = stream.tap_stream_id
 
@@ -89,6 +87,3 @@ def main():
     elif parsed_args.catalog:
         state = parsed_args.state or {}
         sync(client, parsed_args.catalog, state)
-
-
-

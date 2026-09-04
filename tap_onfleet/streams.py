@@ -1,19 +1,18 @@
 
-# 
+#
 # Module dependencies.
-# 
+#
 
 import os
 import json
-import datetime
-import pytz
+
+from dateutil.parser import parse
 import singer
 from singer import metadata
 from singer import utils
-import time
-from singer.metrics import Point
-from dateutil.parser import parse
+
 from tap_onfleet.context import Context
+from tap_onfleet.exceptions import OnfleetForbiddenError
 
 
 logger = singer.get_logger()
@@ -26,7 +25,7 @@ def get_abs_path(path):
 
 def needs_parse_to_date(string):
     if isinstance(string, str):
-        try: 
+        try:
             parse(string)
             return True
         except ValueError:
@@ -41,14 +40,42 @@ class Stream():
     stream = None
     key_properties = KEY_PROPERTIES
     session_bookmark = None
+    parent = None
 
 
     def __init__(self, client=None):
         self.client = client
 
 
+    def check_access(self) -> bool:
+        """
+        Verify that the API credentials have read access to this stream.
+        Returns True if accessible, False if a 403 Forbidden error is raised.
+        Child streams always return True (access is governed by the parent check).
+        OnfleetUnauthorizedError (401, invalid credentials) is intentionally not
+        caught here and propagates to fail discovery immediately.
+        """
+        if self.parent:
+            return True
+        try:
+            method = getattr(self.client, self.name)
+            result = method(self.replication_key, self.client.start_date)
+            # Generator methods defer the HTTP call until iteration.
+            next(iter(result), None)
+            return True
+        except OnfleetForbiddenError as exc:
+            logger.warning(
+                "Excluding unauthorized stream '%s' from catalog. "
+                "HTTP-Error-Message: '%s'",
+                self.name,
+                exc,
+            )
+            return False
+
+
     def get_bookmark(self, state):
-        return (singer.get_bookmark(state, self.name, self.replication_key)) or Context.config["start_date"]
+        return (singer.get_bookmark(state, self.name, self.replication_key)
+            or Context.config["start_date"])
 
 
     def update_bookmark(self, state, value):
@@ -62,8 +89,8 @@ class Stream():
 
 
     def load_schema(self):
-        schema_file = "schemas/{}.json".format(self.name)
-        with open(get_abs_path(schema_file)) as f:
+        schema_file = f"schemas/{self.name}.json"
+        with open(get_abs_path(schema_file), encoding='utf-8') as f:
             schema = json.load(f)
         return schema
 
@@ -78,7 +105,7 @@ class Stream():
         if self.replication_key:
             mdata = metadata.write(mdata, (), 'valid-replication-keys', [self.replication_key])
 
-        for field_name in schema['properties'].keys():
+        for field_name in schema['properties']:
             if field_name in self.key_properties or field_name == self.replication_key:
                 mdata = metadata.write(mdata, ('properties', field_name), 'inclusion', 'automatic')
             else:
@@ -103,53 +130,52 @@ class Stream():
                     self.update_bookmark(state, item[self.replication_key])
                     yield (self.stream, item)
 
-            except (TypeError, KeyError) as e:
+            except (TypeError, KeyError):
                 yield (self.stream, res)
 
         elif self.replication_method == "FULL_TABLE":
             for item in res:
                 yield (self.stream, item)
-        
 
 class Administrators(Stream):
     name = "administrators"
     replication_method = "INCREMENTAL"
     replication_key = "timeLastModified"
-    key_properties = "id"
+    key_properties = ["id"]
 
 
 class Hubs(Stream):
     name = "hubs"
     replication_method = "FULL_TABLE"
-    key_properties = "id"
+    key_properties = ["id"]
 
 
 class Organizations(Stream):
     name = "organizations"
     replication_method = "INCREMENTAL"
     replication_key = "timeLastModified"
-    key_properties = "id"
+    key_properties = ["id"]
 
 
 class Tasks(Stream):
     name = "tasks"
     replication_method = "INCREMENTAL"
     replication_key = "timeLastModified"
-    key_properties = "id"
+    key_properties = ["id"]
 
 
 class Teams(Stream):
     name = "teams"
     replication_method = "INCREMENTAL"
     replication_key = "timeLastModified"
-    key_properties = "id"
+    key_properties = ["id"]
 
 
 class Workers(Stream):
     name = "workers"
     replication_method = "INCREMENTAL"
     replication_key = "timeLastModified"
-    key_properties = "id"
+    key_properties = ["id"]
 
 
 
@@ -161,9 +187,3 @@ STREAMS = {
     "teams": Teams,
     "workers": Workers
 }
-
-
-
-
-
-

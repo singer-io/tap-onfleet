@@ -1,27 +1,99 @@
 
-# 
+#
 # Module dependencies.
-# 
+#
 
 import os
-import json
 import singer
 from tap_onfleet.streams import STREAMS
+from tap_onfleet.exceptions import OnfleetForbiddenError
+
+
+logger = singer.get_logger()
 
 
 def get_abs_path(path):
     return os.path.join(os.path.dirname(os.path.realpath(__file__)), path)
 
 
+def _prune_inaccessible_children(schemas: dict, field_metadata: dict) -> None:
+    """
+    Remove child streams from the catalog whose parent stream was excluded.
+    Repeats until a full pass removes nothing, so transitive descendants
+    (parent -> child -> grandchild) are pruned regardless of the order in
+    which STREAMS is iterated.
+    Mutates schemas and field_metadata in place.
+    """
+    to_remove = []
+    removed_in_pass = True
+    while removed_in_pass:
+        removed_in_pass = False
+        for name, stream_cls in list(STREAMS.items()):
+            if (name in schemas and getattr(stream_cls, 'parent', None)
+                    and stream_cls.parent not in schemas):
+                logger.warning(
+                    "Stream '%s' excluded because parent stream '%s' is not accessible.",
+                    name, stream_cls.parent,
+                )
+                schemas.pop(name, None)
+                field_metadata.pop(name, None)
+                to_remove.append(name)
+                removed_in_pass = True
+    return to_remove
+
+
+def _apply_access_checks(client, schemas: dict, field_metadata: dict) -> None:
+    """
+    Probe each stream for read access and remove inaccessible streams
+    (and their children) from schemas and field_metadata in place.
+    Raises OnfleetForbiddenError if no parent streams are accessible.
+    Raises OnfleetUnauthorizedError immediately (without probing remaining
+    streams) if the credentials are invalid (HTTP 401), since that is a
+    fatal authentication failure rather than a per-stream permission gap.
+    """
+    inaccessible_streams = [
+        stream_name
+        for stream_name, stream_obj in STREAMS.items()
+        if stream_name in schemas
+        and not stream_obj(client=client).check_access()
+    ]
+
+    for stream_name in inaccessible_streams:
+        schemas.pop(stream_name, None)
+        field_metadata.pop(stream_name, None)
+
+    inaccessible_streams.extend(_prune_inaccessible_children(schemas, field_metadata))
+
+    if not schemas:
+        raise OnfleetForbiddenError(
+            "No streams are accessible. Ensure the credentials have read "
+            "permission for at least one stream."
+        )
+    if inaccessible_streams:
+        logger.warning(
+            "Unauthorized streams excluded from catalog: %s",
+            ", ".join(inaccessible_streams),
+        )
+
+
 def discover_streams(client):
+    schemas = {}
+    field_metadata = {}
+
+    for name, stream_cls in STREAMS.items():
+        instance = stream_cls(client)
+        schemas[name] = singer.resolve_schema_references(instance.load_schema())
+        field_metadata[name] = instance.load_metadata()
+
+    _apply_access_checks(client, schemas, field_metadata)
+
     streams = []
-
-    for s in STREAMS.values():
-        s = s(client)
-        schema = singer.resolve_schema_references(s.load_schema())
-        streams.append({'stream': s.name, 'tap_stream_id': s.name, 'schema': schema, 'metadata': s.load_metadata()})
+    for name, schema in schemas.items():
+        streams.append({
+            'stream': name,
+            'tap_stream_id': name,
+            'key_properties': STREAMS[name].key_properties,
+            'schema': schema,
+            'metadata': field_metadata[name],
+        })
     return streams
-
-
-
-

@@ -11,7 +11,7 @@ jobs:
             uv venv --python 3.12 /usr/local/share/virtualenvs/tap-onfleet
             source /usr/local/share/virtualenvs/tap-onfleet/bin/activate
             uv pip install -U pip setuptools
-            uv pip install .[dev]
+            uv pip install -e .[dev]
       - add_ssh_keys
       - run:
           name: 'JSON Validator'
@@ -28,12 +28,21 @@ jobs:
           command: |
             source /usr/local/share/virtualenvs/tap-onfleet/bin/activate
             mkdir -p test_output
-            coverage run -m pytest tests/unittests --junitxml=test_output/report.xml
+            coverage run --source=tap_onfleet -m pytest tests/unittests --junitxml=test_output/report.xml
+          when: always
+      - run:
+          name: 'Coverage Report'
+          command: |
+            source /usr/local/share/virtualenvs/tap-onfleet/bin/activate
+            coverage report -m --fail-under=99
             coverage html
+          when: always
       - store_test_results:
           path: test_output
       - store_artifacts:
           path: htmlcov
+      - store_artifacts:
+          path: coverage.txt
       # ----------------------------------------------------------------
       # Integration Tests — controlled by USE_TAPTESTER env var.
       #

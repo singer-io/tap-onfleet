@@ -9,8 +9,10 @@ from singer import metadata
 from tap_onfleet.streams import (
     Stream, Administrators, Hubs, Organizations, Tasks, Teams, Workers,
     STREAMS,
+    needs_parse_to_date,
 )
 from tap_onfleet.context import Context
+from tap_onfleet.exceptions import OnfleetForbiddenError
 
 
 class TestStreamClasses(unittest.TestCase):
@@ -48,6 +50,25 @@ class TestStreamClasses(unittest.TestCase):
         self.assertEqual(Tasks.replication_key, 'timeLastModified')
         self.assertEqual(Teams.replication_key, 'timeLastModified')
         self.assertEqual(Workers.replication_key, 'timeLastModified')
+
+
+class TestStreamHelpers(unittest.TestCase):
+    """Tests for small helper methods and predicates."""
+
+    def test_needs_parse_to_date_true_for_valid_datetime_string(self):
+        self.assertTrue(needs_parse_to_date('2024-01-01T00:00:00Z'))
+
+    def test_needs_parse_to_date_false_for_invalid_string(self):
+        self.assertFalse(needs_parse_to_date('not-a-date'))
+
+    def test_needs_parse_to_date_false_for_non_string(self):
+        self.assertFalse(needs_parse_to_date(12345))
+
+    def test_is_selected_reflects_stream_assignment(self):
+        stream = Stream(MagicMock())
+        self.assertFalse(stream.is_selected())
+        stream.stream = MagicMock()
+        self.assertTrue(stream.is_selected())
 
 
 class TestLoadSchema(unittest.TestCase):
@@ -161,6 +182,28 @@ class TestBookmarkMethods(unittest.TestCase):
             stream.is_bookmark_old(state, '2024-01-01T00:00:00Z'))
 
 
+class TestCheckAccess(unittest.TestCase):
+    """Tests for Stream.check_access()."""
+
+    def test_logs_warning_for_unauthorized_stream(self):
+        """check_access logs expected warning and returns False on 403."""
+        client = MagicMock()
+        client.start_date = '2019-01-01T00:00:00Z'
+        forbidden_error = OnfleetForbiddenError('403 Forbidden')
+        client.administrators.side_effect = forbidden_error
+
+        stream = Administrators(client)
+        with patch('tap_onfleet.streams.logger.warning') as warning_mock:
+            has_access = stream.check_access()
+
+        self.assertFalse(has_access)
+        warning_mock.assert_called_once_with(
+            "Excluding unauthorized stream '%s' from catalog. HTTP-Error-Message: '%s'",
+            'administrators',
+            forbidden_error,
+        )
+
+
 class TestSyncMethod(unittest.TestCase):
     """Tests for Stream.sync() generator."""
 
@@ -206,3 +249,16 @@ class TestSyncMethod(unittest.TestCase):
         list(stream.sync(state))  # consume generator
         bm = stream.get_bookmark(state)
         self.assertEqual(bm, '2024-06-15 10:00:00 UTC')
+
+    def test_incremental_sync_yields_raw_response_on_type_error(self):
+        """INCREMENTAL sync yields raw response when record shape is invalid."""
+        client = MagicMock()
+        # Dict iteration causes item access by replication key to fail with TypeError.
+        client.administrators = MagicMock(return_value={'id': 'a1'})
+        stream = Administrators(client)
+        stream.stream = MagicMock()
+        state = {}
+
+        results = list(stream.sync(state))
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0][1], {'id': 'a1'})

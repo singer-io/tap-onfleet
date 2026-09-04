@@ -65,6 +65,17 @@ class TestEpochConversions(unittest.TestCase):
         result = self.client._dictionary_epoch_to_datetime_string(d)
         self.assertIn('2019', result['completionDetails']['time'])
 
+    def test_dictionary_nested_list_conversion(self):
+        """Nested list values inside a dict are traversed and converted."""
+        d = {
+            'events': [
+                {'time': 1551126790000, 'id': 'e1'},
+            ],
+            'id': 'task1',
+        }
+        result = self.client._dictionary_epoch_to_datetime_string(d)
+        self.assertIn('2019', result['events'][0]['time'])
+
     def test_list_epoch_to_datetime_string(self):
         """List items (dicts) have their datetime fields converted."""
         lst = [
@@ -74,6 +85,13 @@ class TestEpochConversions(unittest.TestCase):
         result = self.client._list_epoch_to_datetime_string(lst)
         self.assertEqual(len(result), 2)
         self.assertIn('2019', result[0]['timeCreated'])
+
+    def test_list_epoch_to_datetime_string_ignores_non_dict_items(self):
+        """Non-dict list entries are ignored by conversion helper."""
+        lst = ['raw-string', {'timeCreated': 1551126790000, 'id': '2'}]
+        result = self.client._list_epoch_to_datetime_string(lst)
+        self.assertEqual(result[0], 'raw-string')
+        self.assertIn('2019', result[1]['timeCreated'])
 
 
 class TestCheckRateLimit(unittest.TestCase):
@@ -158,6 +176,33 @@ class TestGet(unittest.TestCase):
         call_args = mock_get.call_args
         self.assertEqual(call_args[1]['params']['lastId'], 'abc123')
 
+    @patch('tap_onfleet.onfleet.requests.get')
+    def test_get_raises_forbidden_on_403(self, mock_get):
+        """_get raises OnfleetForbiddenError when API returns 403."""
+        from tap_onfleet.exceptions import OnfleetForbiddenError
+        mock_response = MagicMock()
+        mock_response.status_code = 403
+        mock_get.return_value = mock_response
+
+        with self.assertRaisesRegex(OnfleetForbiddenError, 'HTTP-error-code: 403'):
+            self.client._get('admins', '2019-01-01T00:00:00Z')
+
+    @patch('tap_onfleet.onfleet.requests.get')
+    def test_get_raises_unauthorized_on_401(self, mock_get):
+        """_get raises OnfleetUnauthorizedError (not OnfleetForbiddenError) when API returns 401."""
+        from tap_onfleet.exceptions import OnfleetForbiddenError, OnfleetUnauthorizedError
+        mock_response = MagicMock()
+        mock_response.status_code = 401
+        mock_get.return_value = mock_response
+
+        with self.assertRaisesRegex(OnfleetUnauthorizedError, 'HTTP-error-code: 401'):
+            self.client._get('admins', '2019-01-01T00:00:00Z')
+        with self.assertRaises(OnfleetUnauthorizedError):
+            try:
+                self.client._get('admins', '2019-01-01T00:00:00Z')
+            except OnfleetForbiddenError:
+                self.fail('401 should not raise OnfleetForbiddenError')
+
 
 class TestStreamEndpoints(unittest.TestCase):
     """Tests for the per-stream client methods (administrators, etc.)."""
@@ -200,6 +245,24 @@ class TestStreamEndpoints(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]['id'], 'org1')
 
+    @patch('tap_onfleet.onfleet.requests.get')
+    def test_organizations_yields_from_list_payload(self, mock_get):
+        """organizations handles list payloads in the try iteration path."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = [
+            {'id': 'org1', 'timeCreated': 1551126790000, 'timeLastModified': 1551126790000},
+            {'id': 'org2', 'timeCreated': 1551126790000, 'timeLastModified': 1551126790000},
+        ]
+        mock_response.headers = {
+            'X-RateLimit-Remaining': '100',
+            'X-RateLimit-Limit': '100',
+        }
+        mock_get.return_value = mock_response
+
+        client = Onfleet(start_date="2019-01-01T00:00:00Z", user_agent="test", api_key="key123")
+        result = list(client.organizations(bookmark="2019-01-01T00:00:00Z"))
+        self.assertEqual([row['id'] for row in result], ['org1', 'org2'])
+
     @patch('tap_onfleet.onfleet.time.localtime')
     @patch('tap_onfleet.onfleet.requests.get')
     def test_tasks_yields_paginated(self, mock_get, mock_localtime):
@@ -241,3 +304,48 @@ class TestStreamEndpoints(unittest.TestCase):
         self.assertEqual(len(result), 2)
         self.assertEqual(result[0]['id'], 't1')
         self.assertEqual(result[1]['id'], 't2')
+
+    @patch('tap_onfleet.onfleet.requests.get')
+    def test_hubs_returns_list(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.json.return_value = [{'id': 'h1', 'timeCreated': 1551126790000}]
+        mock_response.headers = {
+            'X-RateLimit-Remaining': '100',
+            'X-RateLimit-Limit': '100',
+        }
+        mock_get.return_value = mock_response
+
+        client = Onfleet(start_date="2019-01-01T00:00:00Z", user_agent="test", api_key="key123")
+        result = client.hubs(bookmark="2019-01-01T00:00:00Z")
+        self.assertIsInstance(result, list)
+        self.assertEqual(result[0]['id'], 'h1')
+
+    @patch('tap_onfleet.onfleet.requests.get')
+    def test_teams_returns_list(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.json.return_value = [{'id': 'team1', 'timeCreated': 1551126790000}]
+        mock_response.headers = {
+            'X-RateLimit-Remaining': '100',
+            'X-RateLimit-Limit': '100',
+        }
+        mock_get.return_value = mock_response
+
+        client = Onfleet(start_date="2019-01-01T00:00:00Z", user_agent="test", api_key="key123")
+        result = client.teams(bookmark="2019-01-01T00:00:00Z")
+        self.assertIsInstance(result, list)
+        self.assertEqual(result[0]['id'], 'team1')
+
+    @patch('tap_onfleet.onfleet.requests.get')
+    def test_workers_returns_list(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.json.return_value = [{'id': 'worker1', 'timeCreated': 1551126790000}]
+        mock_response.headers = {
+            'X-RateLimit-Remaining': '100',
+            'X-RateLimit-Limit': '100',
+        }
+        mock_get.return_value = mock_response
+
+        client = Onfleet(start_date="2019-01-01T00:00:00Z", user_agent="test", api_key="key123")
+        result = client.workers(bookmark="2019-01-01T00:00:00Z")
+        self.assertIsInstance(result, list)
+        self.assertEqual(result[0]['id'], 'worker1')
