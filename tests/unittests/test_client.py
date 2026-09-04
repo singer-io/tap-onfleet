@@ -188,15 +188,20 @@ class TestGet(unittest.TestCase):
             self.client._get('admins', '2019-01-01T00:00:00Z')
 
     @patch('tap_onfleet.onfleet.requests.get')
-    def test_get_raises_forbidden_on_401(self, mock_get):
-        """_get raises OnfleetForbiddenError when API returns 401."""
-        from tap_onfleet.exceptions import OnfleetForbiddenError
+    def test_get_raises_unauthorized_on_401(self, mock_get):
+        """_get raises OnfleetUnauthorizedError (not OnfleetForbiddenError) when API returns 401."""
+        from tap_onfleet.exceptions import OnfleetForbiddenError, OnfleetUnauthorizedError
         mock_response = MagicMock()
         mock_response.status_code = 401
         mock_get.return_value = mock_response
 
-        with self.assertRaisesRegex(OnfleetForbiddenError, 'HTTP-error-code: 401'):
+        with self.assertRaisesRegex(OnfleetUnauthorizedError, 'HTTP-error-code: 401'):
             self.client._get('admins', '2019-01-01T00:00:00Z')
+        with self.assertRaises(OnfleetUnauthorizedError):
+            try:
+                self.client._get('admins', '2019-01-01T00:00:00Z')
+            except OnfleetForbiddenError:
+                self.fail('401 should not raise OnfleetForbiddenError')
 
 
 class TestStreamEndpoints(unittest.TestCase):

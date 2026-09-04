@@ -52,6 +52,8 @@ class Stream():
         Verify that the API credentials have read access to this stream.
         Returns True if accessible, False if a 403 Forbidden error is raised.
         Child streams always return True (access is governed by the parent check).
+        OnfleetUnauthorizedError (401, invalid credentials) is intentionally not
+        caught here and propagates to fail discovery immediately.
         """
         if self.parent:
             return True

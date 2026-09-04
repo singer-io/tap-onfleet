@@ -10,7 +10,7 @@ from requests.auth import HTTPBasicAuth
 from singer import utils
 import backoff
 import requests
-from tap_onfleet.exceptions import OnfleetForbiddenError
+from tap_onfleet.exceptions import OnfleetForbiddenError, OnfleetUnauthorizedError
 
 
 logger = logging.getLogger()
@@ -102,8 +102,9 @@ class Onfleet:
                 f"HTTP-error-code: 403, Error: Access forbidden for resource: {path}"
             )
         if response.status_code == 401:
-            raise OnfleetForbiddenError(
-                f"HTTP-error-code: 401, Error: Unauthorized access for resource: {path}"
+            raise OnfleetUnauthorizedError(
+                "HTTP-error-code: 401, Error: Invalid API credentials. "
+                "Please verify the configured API key."
             )
         response.raise_for_status()
         self._check_rate_limit(

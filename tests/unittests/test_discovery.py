@@ -7,7 +7,7 @@ from tap_onfleet.discover import (
     _apply_access_checks,
     _prune_inaccessible_children,
 )
-from tap_onfleet.exceptions import OnfleetForbiddenError
+from tap_onfleet.exceptions import OnfleetForbiddenError, OnfleetUnauthorizedError
 from tap_onfleet.streams import STREAMS, Administrators, Stream
 
 
@@ -112,6 +112,46 @@ class TestApplyAccessChecks(unittest.TestCase):
             instance = cls.return_value
             instance.check_access.assert_called_once()
 
+    def test_unauthorized_error_stops_discovery_immediately(self):
+        """A 401 on the first stream propagates immediately with an
+        authentication-specific message and does not probe later streams."""
+        client = MagicMock()
+        schemas, field_metadata = _make_schemas_and_metadata(
+            ['administrators', 'hubs', 'workers']
+        )
+
+        auth_error = OnfleetUnauthorizedError(
+            "HTTP-error-code: 401, Error: Invalid API credentials. "
+            "Please verify the configured API key."
+        )
+
+        admins_instance = MagicMock()
+        admins_instance.check_access.side_effect = auth_error
+        admins_cls = MagicMock(return_value=admins_instance)
+        admins_cls.parent = None
+
+        hubs_instance = MagicMock()
+        hubs_cls = MagicMock(return_value=hubs_instance)
+        hubs_cls.parent = None
+
+        workers_instance = MagicMock()
+        workers_cls = MagicMock(return_value=workers_instance)
+        workers_cls.parent = None
+
+        mock_streams = {
+            'administrators': admins_cls,
+            'hubs': hubs_cls,
+            'workers': workers_cls,
+        }
+
+        with patch('tap_onfleet.discover.STREAMS', mock_streams):
+            with self.assertRaisesRegex(OnfleetUnauthorizedError, 'Invalid API credentials'):
+                _apply_access_checks(client, schemas, field_metadata)
+
+        admins_instance.check_access.assert_called_once()
+        hubs_instance.check_access.assert_not_called()
+        workers_instance.check_access.assert_not_called()
+
 
 # ---------------------------------------------------------------------------
 # _prune_inaccessible_children
@@ -162,6 +202,39 @@ class TestPruneInaccessibleChildren(unittest.TestCase):
         _prune_inaccessible_children(schemas, field_metadata)
 
         self.assertEqual(set(schemas.keys()), original_keys)
+
+    def test_transitive_grandchild_pruned_when_iterated_before_child(self):
+        """A grandchild is pruned even when STREAMS lists it before its
+        child, i.e. a parent -> child -> grandchild chain probed out of
+        order still fully prunes the grandchild once the child is removed."""
+        schemas = {'parent_stream': {}, 'child_stream': {}, 'grandchild_stream': {}}
+        field_metadata = {
+            'parent_stream': [], 'child_stream': [], 'grandchild_stream': [],
+        }
+
+        mock_grandchild = MagicMock()
+        mock_grandchild.parent = 'child_stream'
+        mock_child = MagicMock()
+        mock_child.parent = 'parent_stream'
+
+        # Grandchild is iterated before its parent (child_stream) so a single
+        # pass would miss it once child_stream is removed later in the loop.
+        mock_streams = {
+            'grandchild_stream': mock_grandchild,
+            'child_stream': mock_child,
+        }
+        # parent_stream is absent from STREAMS/schemas, simulating that it
+        # was already excluded by _apply_access_checks.
+        schemas.pop('parent_stream')
+        field_metadata.pop('parent_stream')
+
+        with patch('tap_onfleet.discover.STREAMS', mock_streams):
+            _prune_inaccessible_children(schemas, field_metadata)
+
+        self.assertNotIn('child_stream', schemas)
+        self.assertNotIn('grandchild_stream', schemas)
+        self.assertNotIn('child_stream', field_metadata)
+        self.assertNotIn('grandchild_stream', field_metadata)
 
 
 # ---------------------------------------------------------------------------
@@ -237,6 +310,17 @@ class TestStreamCheckAccess(unittest.TestCase):
         client.administrators.side_effect = OnfleetForbiddenError("403 Forbidden")
         stream = Administrators(client)
         self.assertFalse(stream.check_access())
+
+    def test_unauthorized_error_propagates(self):
+        """check_access does not swallow OnfleetUnauthorizedError (401); it propagates."""
+        client = MagicMock()
+        client.start_date = '2019-01-01T00:00:00Z'
+        client.administrators.side_effect = OnfleetUnauthorizedError(
+            "HTTP-error-code: 401, Error: Invalid API credentials."
+        )
+        stream = Administrators(client)
+        with self.assertRaises(OnfleetUnauthorizedError):
+            stream.check_access()
 
     def test_child_stream_always_returns_true(self):
         """check_access always returns True for a stream with a parent."""
